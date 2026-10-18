@@ -1,0 +1,1345 @@
+<!DOCTYPE html>
+<html lang="ja" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3年B組 Café Bloom - リアルタイム整理券＆メニューシステム</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Cormorant Garamond & Zen Maru Gothic -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,400&family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <!-- Tailwind カスタムカラー & フォント拡張設定 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        bloom: {
+                            bg: '#FAF7F2',       // 生成りベージュ
+                            card: '#FFFFFF',     // メインカードホワイト
+                            sub: '#F3EFE6',      // サブ領域サンドベージュ
+                            terracotta: '#C86D51',// テラコッタ
+                            terracottaHover: '#B35C42',
+                            sage: '#7A8D7B',     // セージグリーン
+                            sageLight: '#E8EFE8',
+                            brown: '#4A3B32',    // ダークブラウン
+                            brownLight: '#78685D',
+                            border: '#E5DEC9'    // ボーダーカラー
+                        }
+                    },
+                    fontFamily: {
+                        serif: ['"Cormorant Garamond"', 'serif'],
+                        sans: ['"Zen Maru Gothic"', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #FAF7F2;
+            color: #4A3B32;
+            font-family: 'Zen Maru Gothic', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .font-brand {
+            font-family: 'Cormorant Garamond', serif;
+        }
+
+        .view-section {
+            transition: opacity 0.25s ease-in-out;
+        }
+
+        @keyframes pulse-slow {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.02); opacity: 0.92; }
+        }
+        .animate-pulse-slow {
+            animation: pulse-slow 2.5s infinite ease-in-out;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #FAF7F2;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #D1C7BD;
+            border-radius: 9999px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-bloom-terracotta selection:text-white">
+
+    <!-- ========================================== -->
+    <!-- ヘッダー (全画面共通) -->
+    <!-- ========================================== -->
+    <header class="sticky top-0 z-30 bg-bloom-bg/90 backdrop-blur-md border-b border-bloom-border px-4 py-3 shadow-sm transition-all">
+        <div class="max-w-4xl mx-auto flex items-center justify-between">
+            <!-- ブランドロゴ -->
+            <button onclick="switchView('customer')" class="text-left group flex items-center gap-2">
+                <span class="w-9 h-9 rounded-full bg-bloom-terracotta text-white flex items-center justify-center font-serif text-xl font-bold shadow-sm group-hover:scale-105 transition-transform">
+                    B
+                </span>
+                <div>
+                    <h1 class="font-brand font-bold text-2xl md:text-3xl tracking-wide text-bloom-brown leading-none">
+                        Café Bloom
+                    </h1>
+                    <p class="text-[10px] text-bloom-brownLight tracking-wider uppercase font-medium">3年B組 文化祭カフェ</p>
+                </div>
+            </button>
+
+            <!-- 呼出状況バッジ & スタッフ切り替えボタン -->
+            <div class="flex items-center gap-2 md:gap-3">
+                <div class="hidden sm:flex items-center gap-1.5 bg-bloom-sub border border-bloom-border px-3 py-1.5 rounded-full text-xs font-bold text-bloom-brown">
+                    <span class="w-2 h-2 rounded-full bg-bloom-terracotta animate-ping"></span>
+                    <span>案内中:</span>
+                    <span id="header-calling-number" class="font-serif text-sm text-bloom-terracotta font-bold">---</span>
+                </div>
+
+                <!-- リアルタイム同期状態インジケーター -->
+                <span id="cloud-sync-status" class="flex items-center gap-1 text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full font-bold">
+                    <i class="fa-solid fa-cloud text-[10px]"></i> クラウド同期中
+                </span>
+
+                <button id="btn-header-staff" onclick="switchView('auth')" class="flex items-center gap-1.5 text-xs bg-bloom-brown text-white hover:bg-bloom-terracotta px-3.5 py-2 rounded-full font-medium transition-all shadow-sm active:scale-95">
+                    <i class="fa-solid fa-lock text-[11px]"></i>
+                    <span id="header-staff-btn-text">スタッフ管理</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- メインコンテンツコンテナ -->
+    <main class="flex-grow max-w-4xl w-full mx-auto p-4 md:p-6 space-y-6">
+
+        <!-- ========================================== -->
+        <!-- VIEW 1: 来場者画面 (#view-customer) -->
+        <!-- ========================================== -->
+        <section id="view-customer" class="view-section space-y-6">
+
+            <!-- 1. トップヒーロー画像＆メッセージ領域 -->
+            <div class="relative w-full h-52 md:h-72 rounded-3xl overflow-hidden shadow-md group">
+                <img 
+                    src="https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=1200&q=80" 
+                    alt="Café Bloom Interior" 
+                    class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                    onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=1200&q=80';"
+                >
+                <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent flex flex-col justify-end p-5 md:p-8 text-white">
+                    <span class="inline-block bg-bloom-terracotta/90 backdrop-blur-xs text-white text-[11px] font-bold px-3 py-1 rounded-full w-fit mb-2">
+                        3年B組 教室カフェ
+                    </span>
+                    <h2 class="font-brand font-bold text-3xl md:text-5xl tracking-wide mb-1 drop-shadow-md">
+                        Welcome to Café Bloom
+                    </h2>
+                    <p class="text-xs md:text-sm text-amber-100 font-medium opacity-90 drop-shadow-sm">
+                        焼きたてスイーツと、こだわりのドリンクで心休まるひとときを。
+                    </p>
+                </div>
+            </div>
+
+            <!-- 2. リアルタイム混雑状況カード -->
+            <div class="bg-bloom-card border border-bloom-border rounded-3xl p-5 md:p-7 shadow-sm text-center relative overflow-hidden">
+                <div class="absolute -right-8 -top-8 w-28 h-28 bg-bloom-sage/10 rounded-full blur-xl pointer-events-none"></div>
+                <div class="absolute -left-8 -bottom-8 w-28 h-28 bg-bloom-terracotta/10 rounded-full blur-xl pointer-events-none"></div>
+
+                <div class="flex items-center justify-center gap-2 mb-2">
+                    <span class="inline-block bg-bloom-sageLight text-bloom-sage text-xs font-bold px-3 py-1 rounded-full">
+                        <i class="fa-solid fa-mug-hot mr-1"></i> リアルタイム混雑状況
+                    </span>
+                    <span id="cust-status-badge" class="bg-emerald-100 text-emerald-800 text-xs font-bold px-3 py-1 rounded-full border border-emerald-200">
+                        順調に案内中
+                    </span>
+                </div>
+
+                <h2 class="text-xl md:text-2xl font-bold text-bloom-brown mb-4">ただいまのお呼び出し状況</h2>
+
+                <!-- 数値表示エリア -->
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 my-4">
+                    <div class="bg-bloom-bg border border-bloom-border/70 p-3.5 rounded-2xl flex flex-col justify-center items-center">
+                        <span class="text-xs text-bloom-brownLight font-medium mb-1">現在の待ち組数</span>
+                        <div class="flex items-baseline gap-1">
+                            <span id="cust-waiting-count" class="font-serif text-3xl md:text-4xl font-bold text-bloom-brown">0</span>
+                            <span class="text-xs font-bold text-bloom-brown">組</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-bloom-bg border border-bloom-border/70 p-3.5 rounded-2xl flex flex-col justify-center items-center">
+                        <span class="text-xs text-bloom-brownLight font-medium mb-1">目安待ち時間</span>
+                        <div class="flex items-baseline gap-1">
+                            <span id="cust-estimated-time" class="font-serif text-3xl md:text-4xl font-bold text-bloom-terracotta">0</span>
+                            <span class="text-xs font-bold text-bloom-terracotta">分</span>
+                        </div>
+                    </div>
+
+                    <div class="col-span-2 md:col-span-1 bg-bloom-terracotta/10 border border-bloom-terracotta/30 p-3.5 rounded-2xl flex flex-col justify-center items-center">
+                        <span class="text-xs text-bloom-terracotta font-bold mb-1">ただいま案内中の番号</span>
+                        <span id="cust-calling-number" class="font-serif text-3xl md:text-4xl font-bold text-bloom-terracotta">---</span>
+                    </div>
+                </div>
+
+                <!-- スタッフからのおしらせバナー -->
+                <div id="announcement-banner" class="bg-bloom-sub rounded-xl p-3 text-xs text-bloom-brown flex items-center justify-center gap-2 border border-bloom-border/50 mt-2">
+                    <i class="fa-solid fa-bullhorn text-bloom-terracotta"></i>
+                    <span id="announcement-text">カフェのおいしいスウィーツとドリンクをご用意してお待ちしております！</span>
+                </div>
+            </div>
+
+            <!-- 3. マイ整理券表示 ＆ 発券エリア -->
+            <div id="ticket-interactive-area">
+
+                <!-- [A] 発券フォーム（未所持時 / 1〜4名選択） -->
+                <div id="ticket-issue-box" class="bg-bloom-card border-2 border-bloom-terracotta/40 rounded-3xl p-6 shadow-md text-center space-y-5">
+                    <div class="space-y-1">
+                        <h3 class="font-brand font-bold text-2xl md:text-3xl text-bloom-brown">
+                            Take a Ticket
+                        </h3>
+                        <p class="text-sm text-bloom-brownLight font-medium">
+                            ご来店人数を選択してデジタル整理券を発行してください
+                        </p>
+                    </div>
+
+                    <!-- 人数選択ボタン (1名, 2名, 3名, 4名) -->
+                    <div class="space-y-2 max-w-md mx-auto">
+                        <label class="block text-xs font-bold text-bloom-brown text-center">
+                            ご来店人数 <span class="text-bloom-terracotta">*</span>
+                        </label>
+                        <div class="grid grid-cols-4 gap-2 md:gap-3" id="party-size-selector">
+                            <button type="button" onclick="selectPartySize(1)" class="party-btn p-3.5 rounded-2xl border-2 border-bloom-border text-bloom-brown font-bold text-sm md:text-base hover:border-bloom-terracotta transition-all bg-white" data-size="1">1名</button>
+                            <button type="button" onclick="selectPartySize(2)" class="party-btn p-3.5 rounded-2xl border-2 border-bloom-terracotta text-white font-bold text-sm md:text-base bg-bloom-terracotta shadow-sm" data-size="2">2名</button>
+                            <button type="button" onclick="selectPartySize(3)" class="party-btn p-3.5 rounded-2xl border-2 border-bloom-border text-bloom-brown font-bold text-sm md:text-base hover:border-bloom-terracotta transition-all bg-white" data-size="3">3名</button>
+                            <button type="button" onclick="selectPartySize(4)" class="party-btn p-3.5 rounded-2xl border-2 border-bloom-border text-bloom-brown font-bold text-sm md:text-base hover:border-bloom-terracotta transition-all bg-white" data-size="4">4名</button>
+                        </div>
+                    </div>
+
+                    <!-- 発券実行ボタン -->
+                    <button id="btn-issue-ticket" onclick="issueTicket()" class="w-full max-w-md mx-auto bg-bloom-terracotta hover:bg-bloom-terracottaHover text-white font-bold py-4 px-6 rounded-2xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 text-base md:text-lg active:scale-98">
+                        <i class="fa-solid fa-ticket text-xl"></i>
+                        <span>整理券を発行する（無料）</span>
+                    </button>
+                    <p class="text-[11px] text-bloom-brownLight">※名前や連絡先の入力は不要です。ワンタップで発行されます。</p>
+                </div>
+
+                <!-- [B] マイ整理券カード（所持時 / QRコードなし・キャンセルあり） -->
+                <div id="my-ticket-card" class="hidden bg-bloom-card border-2 border-bloom-terracotta rounded-3xl p-6 shadow-xl relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-full h-3 bg-bloom-terracotta"></div>
+                    
+                    <div class="flex items-center justify-between border-b border-bloom-border pb-4 mb-4">
+                        <div class="flex items-center gap-2">
+                            <span class="w-3 h-3 rounded-full bg-bloom-terracotta"></span>
+                            <span class="font-brand font-bold text-xl text-bloom-brown">My Ticket</span>
+                        </div>
+                        <span id="my-ticket-status-badge" class="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                            お待ちください
+                        </span>
+                    </div>
+
+                    <!-- 呼出中通知バナー -->
+                    <div id="called-notification" class="hidden bg-emerald-500 text-white p-4 rounded-2xl text-center mb-5 animate-pulse-slow shadow-lg">
+                        <div class="text-2xl font-bold mb-1">
+                            <i class="fa-solid fa-bell mr-1"></i> お呼び出し中！
+                        </div>
+                        <p class="text-sm font-medium">お待たせいたしました。3年B組 Café Bloom 受付へお越しください！</p>
+                    </div>
+
+                    <!-- 整理券メイン情報 -->
+                    <div class="text-center py-2 space-y-2">
+                        <p class="text-xs text-bloom-brownLight font-bold uppercase tracking-wider">お客様の整理券番号</p>
+                        <div id="my-ticket-number" class="font-serif font-bold text-5xl md:text-6xl text-bloom-brown tracking-tight">
+                            ---
+                        </div>
+                        <div class="flex justify-center items-center gap-4 text-xs font-medium text-bloom-brownLight pt-2">
+                            <span><i class="fa-solid fa-user-group mr-1 text-bloom-terracotta"></i>ご来店人数: <strong id="my-ticket-party" class="text-bloom-brown font-bold text-sm">2</strong>名</span>
+                            <span><i class="fa-regular fa-clock mr-1 text-bloom-terracotta"></i>受付時刻: <strong id="my-ticket-time" class="text-bloom-brown font-bold text-sm">11:30</strong></span>
+                        </div>
+                    </div>
+
+                    <!-- 待ち順番情報 -->
+                    <div id="my-ticket-wait-info" class="bg-bloom-sub rounded-2xl p-4 my-4 text-center border border-bloom-border">
+                        <p class="text-xs text-bloom-brownLight">あなたの順番まで</p>
+                        <p class="text-base font-bold text-bloom-brown my-0.5">
+                            あと <span id="my-ticket-ahead-count" class="font-serif text-2xl text-bloom-terracotta px-1">0</span> 組お待ちです
+                        </p>
+                        <p class="text-[11px] text-bloom-brownLight">目安時間: 約 <span id="my-ticket-est-minutes" class="font-bold text-bloom-brown">0</span> 分後</p>
+                    </div>
+
+                    <!-- キャンセルボタン -->
+                    <div class="pt-2 flex justify-center">
+                        <button onclick="promptCancelTicket()" class="text-xs text-rose-600 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-4 py-2.5 rounded-full font-bold transition-all flex items-center gap-1.5 active:scale-95">
+                            <i class="fa-solid fa-xmark"></i>
+                            <span>整理券をキャンセルする</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. カフェメニュー紹介 -->
+            <div class="space-y-4 pt-4">
+                <div class="flex items-center justify-between border-b border-bloom-border pb-2">
+                    <div>
+                        <h3 class="font-brand font-bold text-2xl text-bloom-brown">Café Menu</h3>
+                        <p class="text-xs text-bloom-brownLight">手作りのドリンク＆スウィーツ</p>
+                    </div>
+                    <div class="flex gap-1 text-xs" id="menu-category-filters">
+                        <button onclick="filterMenu('all')" class="menu-cat-btn active px-3 py-1.5 rounded-full bg-bloom-brown text-white font-bold transition-all">すべて</button>
+                        <button onclick="filterMenu('drink')" class="menu-cat-btn px-3 py-1.5 rounded-full bg-white text-bloom-brown font-bold border border-bloom-border hover:border-bloom-brown transition-all">ドリンク</button>
+                        <button onclick="filterMenu('sweets')" class="menu-cat-btn px-3 py-1.5 rounded-full bg-white text-bloom-brown font-bold border border-bloom-border hover:border-bloom-brown transition-all">スイーツ</button>
+                    </div>
+                </div>
+
+                <!-- メニューグリッド -->
+                <div id="customer-menu-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- JSで動的描画 -->
+                </div>
+            </div>
+
+            <!-- 店舗情報 -->
+            <div class="bg-bloom-sub border border-bloom-border rounded-3xl p-5 text-xs text-bloom-brown space-y-2">
+                <div class="font-bold text-sm text-bloom-brown flex items-center gap-2">
+                    <i class="fa-solid fa-location-dot text-bloom-terracotta"></i>
+                    <span>3年B組 Café Bloom 案内</span>
+                </div>
+                <p>場所: 南校舎 2階 3年B組教室</p>
+                <p class="text-bloom-brownLight">※呼び出し時にご不在の場合はキャンセル扱いとなる場合がございます。順番が近づきましたらカフェ前へお越しください。</p>
+            </div>
+
+        </section>
+
+
+        <!-- ========================================== -->
+        <!-- VIEW 2: スタッフ認証画面 (#view-auth) -->
+        <!-- ========================================== -->
+        <section id="view-auth" class="view-section hidden max-w-sm mx-auto my-12">
+            <div class="bg-bloom-card border border-bloom-border rounded-3xl p-6 md:p-8 shadow-md space-y-6">
+                <div class="text-center space-y-2">
+                    <div class="w-12 h-12 rounded-full bg-bloom-brown text-white mx-auto flex items-center justify-center text-xl shadow-sm">
+                        <i class="fa-solid fa-user-shield"></i>
+                    </div>
+                    <h2 class="font-brand font-bold text-2xl text-bloom-brown">Staff Authentication</h2>
+                    <p class="text-xs text-bloom-brownLight">スタッフ専用管理画面へのアクセス</p>
+                </div>
+
+                <form onsubmit="handleAuthSubmit(event)" class="space-y-4">
+                    <div class="space-y-1">
+                        <label class="block text-xs font-bold text-bloom-brown">パスワード</label>
+                        <div class="relative">
+                            <input type="password" id="auth-password" placeholder="パスワードを入力" required class="w-full px-4 py-3 rounded-2xl border border-bloom-border focus:outline-none focus:border-bloom-terracotta text-sm bg-bloom-bg/50 pr-10">
+                            <button type="button" onclick="togglePasswordVisibility()" class="absolute right-3 top-1/2 -translate-y-1/2 text-bloom-brownLight hover:text-bloom-brown p-1 text-sm">
+                                <i id="auth-pwd-icon" class="fa-solid fa-eye-slash"></i>
+                            </button>
+                        </div>
+                        <p id="auth-error-msg" class="text-xs text-rose-600 font-bold mt-1.5 hidden flex items-center gap-1">
+                            <i class="fa-solid fa-circle-exclamation"></i>
+                            <span>パスワードが間違っています。</span>
+                        </p>
+                    </div>
+
+                    <button type="submit" class="w-full bg-bloom-brown hover:bg-bloom-terracotta text-white font-bold py-3.5 px-4 rounded-2xl shadow transition-all text-sm active:scale-98">
+                        ログイン
+                    </button>
+                </form>
+
+                <div class="text-center pt-2 border-t border-bloom-border/60">
+                    <button onclick="switchView('customer')" class="text-xs text-bloom-brownLight hover:text-bloom-brown font-bold transition-colors">
+                        ← お客様用画面に戻る
+                    </button>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- ========================================== -->
+        <!-- VIEW 3: スタッフ管理画面 (#view-staff) -->
+        <!-- ========================================== -->
+        <section id="view-staff" class="view-section hidden space-y-6">
+
+            <!-- ヘッダー＆タブ -->
+            <div class="bg-bloom-card border border-bloom-border rounded-3xl p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl bg-bloom-brown text-white flex items-center justify-center font-bold shadow-xs">
+                        <i class="fa-solid fa-sliders"></i>
+                    </div>
+                    <div>
+                        <h2 class="font-brand font-bold text-xl text-bloom-brown leading-none">Staff Dashboard</h2>
+                        <span class="text-[11px] text-bloom-brownLight">3年B組 Café Bloom 管理システム (クラウド同期中)</span>
+                    </div>
+                </div>
+
+                <div class="flex bg-bloom-sub p-1 rounded-2xl border border-bloom-border self-start md:self-auto">
+                    <button id="tab-btn-tickets" onclick="switchStaffTab('tickets')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all bg-white text-bloom-brown shadow-sm">
+                        <i class="fa-solid fa-ticket mr-1"></i> 整理券・待ち時間管理
+                    </button>
+                    <button id="tab-btn-menu" onclick="switchStaffTab('menu')" class="px-4 py-2 rounded-xl text-xs font-bold transition-all text-bloom-brownLight hover:text-bloom-brown">
+                        <i class="fa-solid fa-mug-hot mr-1"></i> 商品・メニュー管理
+                    </button>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- TAB 1: 🎫 整理券・待ち時間管理 (`#staff-tab-tickets`) -->
+            <!-- ========================================== -->
+            <div id="staff-tab-tickets" class="space-y-6">
+
+                <!-- コントロール ＆ 設定 -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    
+                    <!-- 呼び出しコントロール -->
+                    <div class="md:col-span-2 bg-gradient-to-br from-bloom-terracotta to-amber-700 text-white rounded-3xl p-5 shadow-md flex flex-col justify-between space-y-4">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <span class="bg-white/20 text-white text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">Call Management</span>
+                                <h3 class="text-xl font-bold mt-1">整理券お呼び出し操作</h3>
+                            </div>
+                            <i class="fa-solid fa-bullhorn text-3xl opacity-40"></i>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="callNextTicket()" class="flex-grow bg-white hover:bg-slate-50 text-bloom-terracotta font-bold py-3.5 px-4 rounded-2xl shadow transition-all text-sm md:text-base active:scale-95 flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-bell"></i>
+                                <span>次の番号を呼び出す</span>
+                            </button>
+                            <button onclick="stepBackCallingNumber()" class="bg-white/20 hover:bg-white/30 text-white font-bold py-3.5 px-4 rounded-2xl transition-all text-xs flex items-center gap-1" title="直前の呼び出しをキャンセル/1つ戻す">
+                                <i class="fa-solid fa-rotate-left"></i> 1つ戻す
+                            </button>
+                            <button onclick="openManualIssueModal()" class="bg-white/20 hover:bg-white/30 text-white font-bold p-3.5 rounded-2xl transition-all" title="店頭代理手動発券">
+                                <i class="fa-solid fa-plus text-lg"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 待ち時間＆状態調整 -->
+                    <div class="bg-bloom-card border border-bloom-border rounded-3xl p-5 shadow-sm space-y-3 flex flex-col justify-between">
+                        <div>
+                            <span class="text-xs font-bold text-bloom-brownLight">1組目安時間 / 混雑ステータス</span>
+                            <div class="flex items-center justify-between mt-2">
+                                <button onclick="adjustWaitTime(-1)" class="w-8 h-8 rounded-xl border border-bloom-border bg-bloom-bg font-bold text-bloom-brown text-base flex items-center justify-center">-5分</button>
+                                <div class="text-center">
+                                    <span id="staff-wait-per-group" class="font-serif text-3xl font-bold text-bloom-brown">5</span>
+                                    <span class="text-xs font-bold text-bloom-brown">分 / 組</span>
+                                </div>
+                                <button onclick="adjustWaitTime(1)" class="w-8 h-8 rounded-xl border border-bloom-border bg-bloom-bg font-bold text-bloom-brown text-base flex items-center justify-center">+5分</button>
+                            </div>
+                        </div>
+
+                        <!-- 混雑状態切り替えボタン -->
+                        <div class="grid grid-cols-3 gap-1 pt-2 border-t border-bloom-border/60 text-[11px] font-bold">
+                            <button onclick="setStatusMode('順調に案内中')" class="py-1 rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100">順調</button>
+                            <button onclick="setStatusMode('混雑中')" class="py-1 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100">混雑</button>
+                            <button onclick="setStatusMode('案内一時停止')" class="py-1 rounded-lg border border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100">一時停止</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- おしらせ編集バー -->
+                <div class="bg-bloom-card border border-bloom-border rounded-2xl p-3.5 flex items-center gap-2 shadow-sm">
+                    <i class="fa-solid fa-bullhorn text-bloom-terracotta text-sm"></i>
+                    <input type="text" id="staff-announcement-input" placeholder="お客様画面へ表示するメッセージ..." class="flex-grow text-xs bg-bloom-bg border border-bloom-border rounded-xl px-3 py-2 text-bloom-brown focus:outline-none focus:border-bloom-terracotta">
+                    <button onclick="updateAnnouncement()" class="bg-bloom-brown hover:bg-bloom-brownLight text-white text-xs font-bold px-3.5 py-2 rounded-xl transition-all">
+                        更新
+                    </button>
+                </div>
+
+                <!-- 整理券一覧 -->
+                <div class="bg-bloom-card border border-bloom-border rounded-3xl p-5 shadow-sm space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-bloom-border pb-3">
+                        <h3 class="font-brand font-bold text-xl text-bloom-brown">整理券一覧 (リアルタイム)</h3>
+
+                        <div class="flex gap-1 text-xs overflow-x-auto pb-1 sm:pb-0" id="staff-status-filters">
+                            <button onclick="filterStaffTickets('all')" class="staff-filter-btn active px-3 py-1 rounded-full bg-bloom-brown text-white font-bold">すべて</button>
+                            <button onclick="filterStaffTickets('waiting')" class="staff-filter-btn px-3 py-1 rounded-full bg-bloom-bg text-bloom-brown font-bold border border-bloom-border">待機中</button>
+                            <button onclick="filterStaffTickets('called')" class="staff-filter-btn px-3 py-1 rounded-full bg-bloom-bg text-bloom-brown font-bold border border-bloom-border">呼び出し中</button>
+                            <button onclick="filterStaffTickets('completed')" class="staff-filter-btn px-3 py-1 rounded-full bg-bloom-bg text-bloom-brown font-bold border border-bloom-border">案内完了</button>
+                            <button onclick="filterStaffTickets('cancelled')" class="staff-filter-btn px-3 py-1 rounded-full bg-bloom-bg text-bloom-brown font-bold border border-bloom-border">キャンセル</button>
+                        </div>
+                    </div>
+
+                    <div id="staff-tickets-list" class="space-y-2.5">
+                        <!-- JSで動的描画 -->
+                    </div>
+                </div>
+
+            </div>
+
+
+            <!-- ========================================== -->
+            <!-- TAB 2: ☕ 商品・メニュー管理 (`#staff-tab-menu`) -->
+            <!-- ========================================== -->
+            <div id="staff-tab-menu" class="hidden space-y-6">
+
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="font-brand font-bold text-2xl text-bloom-brown">Menu Management</h3>
+                        <p class="text-xs text-bloom-brownLight">商品の登録・編集およびクラウド上での在庫切替（全端末即時反映）</p>
+                    </div>
+                    <button onclick="openProductModal()" class="bg-bloom-terracotta hover:bg-bloom-terracottaHover text-white text-xs font-bold px-4 py-2.5 rounded-2xl shadow transition-all flex items-center gap-1.5">
+                        <i class="fa-solid fa-plus"></i>
+                        <span>新しい商品を登録</span>
+                    </button>
+                </div>
+
+                <div id="staff-menu-list" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- JSで動的生成 -->
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+    <footer class="mt-auto border-t border-bloom-border py-4 text-center text-[11px] text-bloom-brownLight bg-bloom-bg">
+        <p>3年B組 Café Bloom Cultural Festival Cloud System &copy; 2026</p>
+    </footer>
+
+
+    <!-- ========================================== -->
+    <!-- モーダルダイアログ群 -->
+    <!-- ========================================== -->
+
+    <!-- モーダル1: 整理券キャンセル確認 -->
+    <div id="modal-cancel-confirm" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-bloom-card border border-bloom-border rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4">
+            <div class="text-center space-y-2">
+                <div class="w-12 h-12 rounded-full bg-rose-100 text-rose-600 mx-auto flex items-center justify-center text-xl">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+                <h3 class="font-bold text-lg text-bloom-brown">整理券のキャンセル</h3>
+                <p class="text-xs text-bloom-brownLight">本当に整理券をキャンセルしますか？キャンセルされた整理券は元に戻せません。</p>
+            </div>
+            <div class="flex gap-2 pt-2">
+                <button onclick="closeModal('modal-cancel-confirm')" class="w-1/2 bg-bloom-bg border border-bloom-border hover:bg-bloom-sub text-bloom-brown font-bold py-2.5 rounded-2xl text-xs transition-all">
+                    戻る
+                </button>
+                <button onclick="executeTicketCancel()" class="w-1/2 bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 rounded-2xl text-xs transition-all shadow">
+                    キャンセルする
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- モーダル2: 店頭手動整理券発券モーダル (1〜4名様) -->
+    <div id="modal-manual-issue" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-bloom-card border border-bloom-border rounded-3xl p-6 max-w-sm w-full shadow-2xl space-y-4">
+            <div class="flex justify-between items-center border-b border-bloom-border pb-3">
+                <h3 class="font-bold text-base text-bloom-brown">店頭での手動整理券発行</h3>
+                <button onclick="closeModal('modal-manual-issue')" class="text-bloom-brownLight hover:text-bloom-brown"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="space-y-3">
+                <label class="block text-xs font-bold text-bloom-brown">ご来店人数</label>
+                <select id="manual-party-size" class="w-full px-4 py-3 rounded-2xl border border-bloom-border text-sm font-bold bg-bloom-bg">
+                    <option value="1">1名様</option>
+                    <option value="2" selected>2名様</option>
+                    <option value="3">3名様</option>
+                    <option value="4">4名様</option>
+                </select>
+            </div>
+            <button onclick="executeManualIssue()" class="w-full bg-bloom-terracotta hover:bg-bloom-terracottaHover text-white font-bold py-3 rounded-2xl text-sm transition-all shadow">
+                整理券を発行する
+            </button>
+        </div>
+    </div>
+
+    <!-- モーダル3: 商品登録・編集モーダル -->
+    <div id="modal-product" class="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-bloom-card border border-bloom-border rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b border-bloom-border pb-3">
+                <h3 id="product-modal-title" class="font-bold text-lg text-bloom-brown">商品を登録</h3>
+                <button onclick="closeModal('modal-product')" class="text-bloom-brownLight hover:text-bloom-brown"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <form onsubmit="handleProductSubmit(event)" class="space-y-3 text-xs">
+                <input type="hidden" id="prod-id">
+                
+                <div>
+                    <label class="block font-bold text-bloom-brown mb-1">商品名 (和名) <span class="text-rose-500">*</span></label>
+                    <input type="text" id="prod-name" required placeholder="例: Bloom 苺のタルト" class="w-full px-3 py-2.5 rounded-xl border border-bloom-border bg-bloom-bg text-sm font-bold">
+                </div>
+
+                <div>
+                    <label class="block font-bold text-bloom-brown mb-1">英語名 / サブタイトル</label>
+                    <input type="text" id="prod-name-en" placeholder="例: Strawberry Tart" class="w-full px-3 py-2.5 rounded-xl border border-bloom-border bg-bloom-bg text-sm">
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block font-bold text-bloom-brown mb-1">カテゴリ</label>
+                        <select id="prod-category" class="w-full px-3 py-2.5 rounded-xl border border-bloom-border bg-bloom-bg font-bold">
+                            <option value="drink">ドリンク</option>
+                            <option value="sweets">スイーツ</option>
+                            <option value="food">フード/その他</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-bold text-bloom-brown mb-1">価格 (円) <span class="text-rose-500">*</span></label>
+                        <input type="number" id="prod-price" required min="0" placeholder="400" class="w-full px-3 py-2.5 rounded-xl border border-bloom-border bg-bloom-bg font-bold text-sm">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-bold text-bloom-brown mb-1">商品説明</label>
+                    <textarea id="prod-desc" rows="2" placeholder="甘酸っぱい苺と濃厚カスタードの相性が抜群の一品" class="w-full px-3 py-2 rounded-xl border border-bloom-border bg-bloom-bg text-xs"></textarea>
+                </div>
+
+                <div>
+                    <label class="block font-bold text-bloom-brown mb-1">アレルゲン表示 (カンマ区切り)</label>
+                    <input type="text" id="prod-allergens" placeholder="例: 卵, 乳, 小麦" class="w-full px-3 py-2.5 rounded-xl border border-bloom-border bg-bloom-bg">
+                </div>
+
+                <div>
+                    <label class="block font-bold text-bloom-brown mb-1">初期在庫状態</label>
+                    <select id="prod-status" class="w-full px-3 py-2.5 rounded-xl border border-bloom-border bg-bloom-bg font-bold">
+                        <option value="available">販売中</option>
+                        <option value="few">残りわずか</option>
+                        <option value="soldout">SOLD OUT</option>
+                    </select>
+                </div>
+
+                <div class="pt-2 flex gap-2">
+                    <button type="button" onclick="closeModal('modal-product')" class="w-1/2 bg-bloom-bg border border-bloom-border font-bold py-2.5 rounded-xl">キャンセル</button>
+                    <button type="submit" class="w-1/2 bg-bloom-brown text-white font-bold py-2.5 rounded-xl shadow">保存する</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+
+    <!-- ========================================== -->
+    <!-- FIREBASE & CORE JAVASCRIPT LOGIC -->
+    <!-- ========================================== -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global Firebase Configuration & Variables
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'cafe-bloom-cultural-fest';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+            apiKey: "AIzaSyDemoConfigForPreviewFallback12345",
+            authDomain: "demo-app.firebaseapp.com",
+            projectId: "demo-app",
+            storageBucket: "demo-app.appspot.com",
+            messagingSenderId: "123456789",
+            appId: "1:123456789:web:demo"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // Strict Paths Rules (Rule 1)
+        const ticketsCol = collection(db, 'artifacts', appId, 'public', 'data', 'tickets');
+        const settingsDoc = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'general');
+        const menuCol = collection(db, 'artifacts', appId, 'public', 'data', 'menu');
+
+        // Valid Passwords
+        const VALID_PASSWORDS = ['1234', 'cafe1234', '2026', 'bloom2026'];
+
+        // Default Initial Menu
+        const DEFAULT_MENU = [
+            { id: 'm-1', name: 'Bloom 苺とベリーのタルト', nameEn: 'Strawberry & Berry Tart', category: 'sweets', price: 450, desc: '自家製カスタードと甘酸っぱい苺を贅沢に使用した一番人気スイーツ。', allergens: ['卵', '乳', '小麦'], status: 'available' },
+            { id: 'm-2', name: 'クラフト抹茶エスプレッソラテ', nameEn: 'Matcha Espresso Latte', category: 'drink', price: 400, desc: '濃厚な抹茶ベースとミルクの綺麗なグラデーションラテ。', allergens: ['乳'], status: 'available' },
+            { id: 'm-3', name: '自家製ハーブレモネード', nameEn: 'Herbal Lemonade', category: 'drink', price: 350, desc: '有機ミントとレモンをじっくり漬け込んだ爽やかなソーダ。', allergens: [], status: 'few' },
+            { id: 'm-4', name: 'スコーンサンド (塩キャラメル)', nameEn: 'Caramel Scone Sandwich', category: 'sweets', price: 380, desc: 'サクサクスコーンに特製クリームと塩キャラメルソースを挟みました。', allergens: ['卵', '乳', '小麦'], status: 'available' },
+            { id: 'm-5', name: '手づくりクッキーアソート (2枚)', nameEn: 'Baked Cookies Set', category: 'sweets', price: 250, desc: 'チョコチップとピスタチオバターの香ばしい手作りクッキー。', allergens: ['卵', '乳', '小麦'], status: 'soldout' }
+        ];
+
+        // State Memory
+        window.state = {
+            tickets: [],
+            settings: {
+                ticketSeq: 1,
+                waitPerGroup: 5,
+                announcement: 'カフェのおいしいスウィーツとドリンクをご用意してお待ちしております！',
+                statusMode: '順調に案内中'
+            },
+            menu: []
+        };
+
+        window.myTicketId = localStorage.getItem('bloom_my_ticket_id') || null;
+        window.selectedPartySize = 2;
+        window.activeCustomerMenuFilter = 'all';
+        window.activeStaffTicketFilter = 'all';
+        window.previousCallingStatus = null;
+
+        // ----------------------------------------------------
+        // INITIALIZATION & REALTIME LISTENERS
+        // ----------------------------------------------------
+        async function initCloudSystem() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                console.log("Firebase Auth Success");
+            } catch (err) {
+                console.warn("Auth initialization fallback:", err);
+            }
+
+            setupRealtimeListeners();
+        }
+
+        function setupRealtimeListeners() {
+            // 1. Settings Listener
+            onSnapshot(settingsDoc, (snapshot) => {
+                if (snapshot.exists()) {
+                    window.state.settings = { ...window.state.settings, ...snapshot.data() };
+                } else {
+                    // Initial Settings Creation
+                    setDoc(settingsDoc, window.state.settings, { merge: true });
+                }
+                renderAll();
+            }, (err) => console.error("Settings Listener Error:", err));
+
+            // 2. Tickets Listener (No complex queries - Rule 2)
+            onSnapshot(ticketsCol, (snapshot) => {
+                const ticketsList = [];
+                snapshot.forEach(docSnap => {
+                    ticketsList.push({ id: docSnap.id, ...docSnap.data() });
+                });
+                window.state.tickets = ticketsList;
+                renderAll();
+            }, (err) => console.error("Tickets Listener Error:", err));
+
+            // 3. Menu Listener
+            onSnapshot(menuCol, (snapshot) => {
+                const menuList = [];
+                snapshot.forEach(docSnap => {
+                    menuList.push({ id: docSnap.id, ...docSnap.data() });
+                });
+
+                if (menuList.length === 0) {
+                    // Populate Default Menu into Cloud if empty
+                    DEFAULT_MENU.forEach(item => {
+                        setDoc(doc(menuCol, item.id), item);
+                    });
+                } else {
+                    window.state.menu = menuList;
+                }
+                renderAll();
+            }, (err) => console.error("Menu Listener Error:", err));
+        }
+
+        // ----------------------------------------------------
+        // UI SWITCHING & RENDERERS
+        // ----------------------------------------------------
+        window.switchView = function(viewName) {
+            const views = document.querySelectorAll('.view-section');
+            views.forEach(v => {
+                v.classList.add('hidden');
+                v.style.display = 'none';
+            });
+
+            const targetView = document.getElementById(`view-${viewName}`);
+            if (targetView) {
+                targetView.classList.remove('hidden');
+                targetView.style.display = 'block';
+            }
+
+            const staffBtnText = document.getElementById('header-staff-btn-text');
+            if (viewName === 'staff') {
+                staffBtnText.innerText = 'お客様画面へ';
+                document.getElementById('btn-header-staff').onclick = () => switchView('customer');
+            } else {
+                staffBtnText.innerText = 'スタッフ管理';
+                document.getElementById('btn-header-staff').onclick = () => switchView('auth');
+            }
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+
+        window.switchStaffTab = function(tabName) {
+            const tabTickets = document.getElementById('staff-tab-tickets');
+            const tabMenu = document.getElementById('staff-tab-menu');
+            const btnTickets = document.getElementById('tab-btn-tickets');
+            const btnMenu = document.getElementById('tab-btn-menu');
+
+            if (tabName === 'tickets') {
+                tabTickets.classList.remove('hidden');
+                tabMenu.classList.add('hidden');
+                btnTickets.className = "px-4 py-2 rounded-xl text-xs font-bold transition-all bg-white text-bloom-brown shadow-sm";
+                btnMenu.className = "px-4 py-2 rounded-xl text-xs font-bold transition-all text-bloom-brownLight hover:text-bloom-brown";
+            } else {
+                tabTickets.classList.add('hidden');
+                tabMenu.classList.remove('hidden');
+                btnMenu.className = "px-4 py-2 rounded-xl text-xs font-bold transition-all bg-white text-bloom-brown shadow-sm";
+                btnTickets.className = "px-4 py-2 rounded-xl text-xs font-bold transition-all text-bloom-brownLight hover:text-bloom-brown";
+            }
+        };
+
+        function renderAll() {
+            renderHeaderAndStatus();
+            renderCustomerTicketArea();
+            renderCustomerMenu();
+            renderStaffTickets();
+            renderStaffMenu();
+        }
+
+        function renderHeaderAndStatus() {
+            const waitingTickets = window.state.tickets.filter(t => t.status === 'waiting');
+            const calledTickets = window.state.tickets.filter(t => t.status === 'called');
+
+            const callingText = calledTickets.length > 0 
+                ? calledTickets.map(t => t.number).join(', ') 
+                : '---';
+
+            document.getElementById('header-calling-number').innerText = callingText;
+            document.getElementById('cust-calling-number').innerText = callingText;
+            document.getElementById('cust-waiting-count').innerText = waitingTickets.length;
+
+            const totalEstMinutes = waitingTickets.length * (window.state.settings.waitPerGroup || 5);
+            document.getElementById('cust-estimated-time').innerText = totalEstMinutes;
+
+            document.getElementById('cust-status-badge').innerText = window.state.settings.statusMode || '順調に案内中';
+            document.getElementById('announcement-text').innerText = window.state.settings.announcement || '';
+            document.getElementById('staff-announcement-input').value = window.state.settings.announcement || '';
+            document.getElementById('staff-wait-per-group').innerText = window.state.settings.waitPerGroup || 5;
+        }
+
+        function renderCustomerTicketArea() {
+            const issueBox = document.getElementById('ticket-issue-box');
+            const myCard = document.getElementById('my-ticket-card');
+
+            const myTicket = window.state.tickets.find(t => t.id === window.myTicketId);
+
+            if (!myTicket || myTicket.status === 'cancelled') {
+                issueBox.classList.remove('hidden');
+                myCard.classList.add('hidden');
+            } else {
+                issueBox.classList.add('hidden');
+                myCard.classList.remove('hidden');
+
+                document.getElementById('my-ticket-number').innerText = myTicket.number;
+                document.getElementById('my-ticket-party').innerText = myTicket.partySize;
+                document.getElementById('my-ticket-time').innerText = myTicket.createdAt;
+
+                const statusBadge = document.getElementById('my-ticket-status-badge');
+                const calledNotice = document.getElementById('called-notification');
+                const waitInfoBox = document.getElementById('my-ticket-wait-info');
+
+                // JavaScript Memory Filtering (Rule 2)
+                const waitingList = window.state.tickets
+                    .filter(t => t.status === 'waiting')
+                    .sort((a, b) => (a.seq || 0) - (b.seq || 0));
+
+                const aheadIndex = waitingList.findIndex(t => t.id === myTicket.id);
+
+                if (myTicket.status === 'called') {
+                    statusBadge.className = "px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 animate-pulse";
+                    statusBadge.innerText = "お呼び出し中！";
+                    calledNotice.classList.remove('hidden');
+                    waitInfoBox.classList.add('hidden');
+
+                    if (window.previousCallingStatus !== myTicket.id) {
+                        playChimeSound();
+                        window.previousCallingStatus = myTicket.id;
+                    }
+                } else if (myTicket.status === 'completed') {
+                    statusBadge.className = "px-3 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-700 border border-gray-300";
+                    statusBadge.innerText = "ご案内完了";
+                    calledNotice.classList.add('hidden');
+                    waitInfoBox.classList.add('hidden');
+                } else {
+                    statusBadge.className = "px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300";
+                    statusBadge.innerText = "お待ちください";
+                    calledNotice.classList.add('hidden');
+                    waitInfoBox.classList.remove('hidden');
+
+                    const aheadCount = aheadIndex >= 0 ? aheadIndex : 0;
+                    document.getElementById('my-ticket-ahead-count').innerText = aheadCount;
+                    document.getElementById('my-ticket-est-minutes').innerText = aheadCount * (window.state.settings.waitPerGroup || 5);
+                }
+            }
+        }
+
+        function renderCustomerMenu() {
+            const container = document.getElementById('customer-menu-grid');
+            container.innerHTML = '';
+
+            let filtered = window.state.menu;
+            if (window.activeCustomerMenuFilter !== 'all') {
+                filtered = window.state.menu.filter(item => item.category === window.activeCustomerMenuFilter);
+            }
+
+            if (filtered.length === 0) {
+                container.innerHTML = `<div class="col-span-2 text-center py-8 text-bloom-brownLight text-xs">該当するメニューはありません。</div>`;
+                return;
+            }
+
+            filtered.forEach(item => {
+                const card = document.createElement('div');
+                card.className = `bg-bloom-card border border-bloom-border rounded-2xl p-4 shadow-sm flex flex-col justify-between space-y-3 relative overflow-hidden ${item.status === 'soldout' ? 'opacity-70' : ''}`;
+
+                let statusBadgeHTML = '';
+                if (item.status === 'available') {
+                    statusBadgeHTML = `<span class="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-emerald-200">販売中</span>`;
+                } else if (item.status === 'few') {
+                    statusBadgeHTML = `<span class="bg-amber-100 text-amber-800 text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-amber-200">残りわずか</span>`;
+                } else {
+                    statusBadgeHTML = `<span class="bg-gray-200 text-gray-700 text-[10px] font-bold px-2.5 py-0.5 rounded-full">SOLD OUT</span>`;
+                }
+
+                const allergenHTML = (item.allergens && item.allergens.length > 0)
+                    ? `<div class="flex items-center gap-1 text-[10px] text-bloom-brownLight"><i class="fa-solid fa-wheat-awn"></i> アレルゲン: ${item.allergens.join(', ')}</div>` 
+                    : `<div class="text-[10px] text-bloom-brownLight"><i class="fa-solid fa-leaf"></i> 特定アレルゲン非含有</div>`;
+
+                card.innerHTML = `
+                    <div class="space-y-1.5">
+                        <div class="flex justify-between items-start gap-2">
+                            <div>
+                                <h4 class="font-bold text-bloom-brown text-base">${escapeHtml(item.name)}</h4>
+                                ${item.nameEn ? `<p class="font-brand text-xs text-bloom-brownLight leading-none">${escapeHtml(item.nameEn)}</p>` : ''}
+                            </div>
+                            ${statusBadgeHTML}
+                        </div>
+                        <p class="text-xs text-bloom-brownLight leading-relaxed pt-1">${escapeHtml(item.desc || '')}</p>
+                    </div>
+
+                    <div class="pt-2 border-t border-bloom-border/50 flex items-end justify-between">
+                        ${allergenHTML}
+                        <span class="font-serif font-bold text-lg text-bloom-brown">¥${item.price}</span>
+                    </div>
+                `;
+
+                container.appendChild(card);
+            });
+        }
+
+        function renderStaffTickets() {
+            const container = document.getElementById('staff-tickets-list');
+            container.innerHTML = '';
+
+            let list = window.state.tickets;
+            if (window.activeStaffTicketFilter !== 'all') {
+                list = window.state.tickets.filter(t => t.status === window.activeStaffTicketFilter);
+            }
+
+            if (list.length === 0) {
+                container.innerHTML = `<div class="text-center py-8 text-bloom-brownLight text-xs">整理券データがありません</div>`;
+                return;
+            }
+
+            const sortedList = [...list].sort((a, b) => (b.seq || 0) - (a.seq || 0));
+
+            sortedList.forEach(t => {
+                const item = document.createElement('div');
+                item.className = "bg-bloom-bg border border-bloom-border rounded-2xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3";
+
+                let statusBadge = '';
+                if (t.status === 'waiting') {
+                    statusBadge = `<span class="bg-amber-100 text-amber-800 text-xs font-bold px-2.5 py-1 rounded-full border border-amber-300">待機中</span>`;
+                } else if (t.status === 'called') {
+                    statusBadge = `<span class="bg-emerald-500 text-white text-xs font-bold px-2.5 py-1 rounded-full animate-pulse">お呼び出し中</span>`;
+                } else if (t.status === 'completed') {
+                    statusBadge = `<span class="bg-gray-200 text-gray-700 text-xs font-bold px-2.5 py-1 rounded-full">案内完了</span>`;
+                } else {
+                    statusBadge = `<span class="bg-rose-100 text-rose-700 text-xs font-bold px-2.5 py-1 rounded-full border border-rose-200">キャンセル</span>`;
+                }
+
+                item.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <span class="font-serif font-bold text-2xl text-bloom-brown w-16">${t.number}</span>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-bold text-bloom-brown">${t.partySize}名様</span>
+                                ${statusBadge}
+                            </div>
+                            <span class="text-[10px] text-bloom-brownLight">受付時刻: ${t.createdAt}</span>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-1.5 self-end sm:self-center text-xs">
+                        ${t.status === 'waiting' ? `<button onclick="setTicketStatus('${t.id}', 'called')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-xl transition-all shadow-sm">呼出</button>` : ''}
+                        ${t.status === 'called' ? `<button onclick="setTicketStatus('${t.id}', 'completed')" class="bg-bloom-brown hover:bg-bloom-brownLight text-white font-bold px-3 py-1.5 rounded-xl transition-all shadow-sm">案内完了</button>` : ''}
+                        ${(t.status === 'waiting' || t.status === 'called') ? `<button onclick="setTicketStatus('${t.id}', 'cancelled')" class="bg-rose-100 hover:bg-rose-200 text-rose-700 font-bold px-3 py-1.5 rounded-xl border border-rose-200 transition-all">キャンセル</button>` : ''}
+                        <button onclick="deleteTicket('${t.id}')" class="text-bloom-brownLight hover:text-rose-600 p-1.5 ml-1" title="削除"><i class="fa-solid fa-trash-can"></i></button>
+                    </div>
+                `;
+
+                container.appendChild(item);
+            });
+        }
+
+        function renderStaffMenu() {
+            const container = document.getElementById('staff-menu-list');
+            container.innerHTML = '';
+
+            window.state.menu.forEach(item => {
+                const card = document.createElement('div');
+                card.className = "bg-bloom-card border border-bloom-border rounded-2xl p-4 shadow-sm space-y-3";
+
+                card.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h4 class="font-bold text-bloom-brown text-base">${escapeHtml(item.name)}</h4>
+                            <p class="font-brand text-xs text-bloom-brownLight">${escapeHtml(item.nameEn || '')}</p>
+                        </div>
+                        <span class="font-serif font-bold text-base text-bloom-brown">¥${item.price}</span>
+                    </div>
+
+                    <div class="text-xs text-bloom-brownLight">
+                        カテゴリ: <span class="font-bold text-bloom-brown uppercase">${item.category}</span> | アレルゲン: ${item.allergens ? item.allergens.join(', ') : 'なし'}
+                    </div>
+
+                    <div class="pt-2 border-t border-bloom-border flex items-center justify-between gap-1">
+                        <div class="flex bg-bloom-bg p-1 rounded-xl border border-bloom-border text-xs w-full max-w-[240px]">
+                            <button onclick="updateProductStatus('${item.id}', 'available')" class="flex-1 py-1 rounded-lg font-bold transition-all ${item.status === 'available' ? 'bg-emerald-500 text-white shadow-xs' : 'text-bloom-brownLight hover:text-bloom-brown'}">販売中</button>
+                            <button onclick="updateProductStatus('${item.id}', 'few')" class="flex-1 py-1 rounded-lg font-bold transition-all ${item.status === 'few' ? 'bg-amber-500 text-white shadow-xs' : 'text-bloom-brownLight hover:text-bloom-brown'}">わずか</button>
+                            <button onclick="updateProductStatus('${item.id}', 'soldout')" class="flex-1 py-1 rounded-lg font-bold transition-all ${item.status === 'soldout' ? 'bg-gray-600 text-white shadow-xs' : 'text-bloom-brownLight hover:text-bloom-brown'}">完売</button>
+                        </div>
+
+                        <div class="flex items-center gap-1">
+                            <button onclick="openProductModal('${item.id}')" class="p-2 text-bloom-brown hover:text-bloom-terracotta"><i class="fa-solid fa-pen-to-square"></i></button>
+                            <button onclick="deleteProduct('${item.id}')" class="p-2 text-bloom-brownLight hover:text-rose-600"><i class="fa-solid fa-trash-can"></i></button>
+                        </div>
+                    </div>
+                `;
+
+                container.appendChild(card);
+            });
+        }
+
+        // ----------------------------------------------------
+        // FIREBASE FIRESTORE DATA ACTIONS
+        // ----------------------------------------------------
+        window.selectPartySize = function(size) {
+            window.selectedPartySize = size;
+            const buttons = document.querySelectorAll('.party-btn');
+            buttons.forEach(btn => {
+                const btnSize = parseInt(btn.getAttribute('data-size'));
+                if (btnSize === size) {
+                    btn.className = "party-btn p-3.5 rounded-2xl border-2 border-bloom-terracotta text-white font-bold text-sm md:text-base bg-bloom-terracotta shadow-sm transition-all";
+                } else {
+                    btn.className = "party-btn p-3.5 rounded-2xl border-2 border-bloom-border text-bloom-brown font-bold text-sm md:text-base hover:border-bloom-terracotta transition-all bg-white";
+                }
+            });
+        };
+
+        window.issueTicket = async function() {
+            const btn = document.getElementById('btn-issue-ticket');
+            btn.disabled = true;
+
+            const now = new Date();
+            const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+            
+            const currentSeq = (window.state.settings.ticketSeq || 1);
+            const formattedNumber = `#${String(currentSeq).padStart(2, '0')}`;
+
+            const ticketData = {
+                number: formattedNumber,
+                seq: currentSeq,
+                partySize: window.selectedPartySize,
+                createdAt: timeStr,
+                status: 'waiting',
+                timestamp: Date.now()
+            };
+
+            try {
+                const docRef = await addDoc(ticketsCol, ticketData);
+                window.myTicketId = docRef.id;
+                localStorage.setItem('bloom_my_ticket_id', window.myTicketId);
+
+                // Update cloud sequence
+                await setDoc(settingsDoc, { ticketSeq: currentSeq + 1 }, { merge: true });
+            } catch (e) {
+                console.error("Issue Ticket Error:", e);
+            } finally {
+                btn.disabled = false;
+            }
+        };
+
+        window.promptCancelTicket = function() {
+            openModal('modal-cancel-confirm');
+        };
+
+        window.executeTicketCancel = async function() {
+            if (!window.myTicketId) return;
+
+            try {
+                await updateDoc(doc(ticketsCol, window.myTicketId), { status: 'cancelled' });
+            } catch (e) {
+                console.error("Cancel Error:", e);
+            }
+
+            window.myTicketId = null;
+            localStorage.removeItem('bloom_my_ticket_id');
+            closeModal('modal-cancel-confirm');
+        };
+
+        window.setTicketStatus = async function(ticketId, newStatus) {
+            try {
+                await updateDoc(doc(ticketsCol, ticketId), { status: newStatus });
+            } catch (e) {
+                console.error("Set Status Error:", e);
+            }
+        };
+
+        window.callNextTicket = async function() {
+            const waitingList = window.state.tickets
+                .filter(t => t.status === 'waiting')
+                .sort((a, b) => (a.seq || 0) - (b.seq || 0));
+
+            if (waitingList.length > 0) {
+                const nextTicket = waitingList[0];
+                await updateDoc(doc(ticketsCol, nextTicket.id), { status: 'called' });
+                playChimeSound();
+            } else {
+                alert('現在「待機中」のお客様はいらっしゃいません。');
+            }
+        };
+
+        window.stepBackCallingNumber = async function() {
+            const calledList = window.state.tickets
+                .filter(t => t.status === 'called')
+                .sort((a, b) => (b.seq || 0) - (a.seq || 0));
+
+            if (calledList.length > 0) {
+                const lastCalled = calledList[0];
+                await updateDoc(doc(ticketsCol, lastCalled.id), { status: 'waiting' });
+            }
+        };
+
+        window.deleteTicket = async function(ticketId) {
+            if (confirm('この整理券レコードを削除しますか？')) {
+                try {
+                    await deleteDoc(doc(ticketsCol, ticketId));
+                    if (window.myTicketId === ticketId) {
+                        window.myTicketId = null;
+                        localStorage.removeItem('bloom_my_ticket_id');
+                    }
+                } catch (e) {
+                    console.error("Delete Ticket Error:", e);
+                }
+            }
+        };
+
+        window.executeManualIssue = async function() {
+            const partySize = parseInt(document.getElementById('manual-party-size').value) || 2;
+            const now = new Date();
+            const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+            
+            const currentSeq = (window.state.settings.ticketSeq || 1);
+            const formattedNumber = `#${String(currentSeq).padStart(2, '0')}`;
+
+            try {
+                await addDoc(ticketsCol, {
+                    number: formattedNumber,
+                    seq: currentSeq,
+                    partySize: partySize,
+                    createdAt: timeStr,
+                    status: 'waiting',
+                    timestamp: Date.now()
+                });
+                await setDoc(settingsDoc, { ticketSeq: currentSeq + 1 }, { merge: true });
+                closeModal('modal-manual-issue');
+            } catch (e) {
+                console.error("Manual Issue Error:", e);
+            }
+        };
+
+        window.adjustWaitTime = async function(delta) {
+            const current = (window.state.settings.waitPerGroup || 5);
+            const nextVal = Math.max(1, current + (delta * 5));
+            await setDoc(settingsDoc, { waitPerGroup: nextVal }, { merge: true });
+        };
+
+        window.setStatusMode = async function(modeStr) {
+            await setDoc(settingsDoc, { statusMode: modeStr }, { merge: true });
+        };
+
+        window.updateAnnouncement = async function() {
+            const val = document.getElementById('staff-announcement-input').value;
+            await setDoc(settingsDoc, { announcement: val }, { merge: true });
+        };
+
+        window.openProductModal = function(productId = null) {
+            const modalTitle = document.getElementById('product-modal-title');
+            
+            if (productId) {
+                const p = window.state.menu.find(m => m.id === productId);
+                if (!p) return;
+                modalTitle.innerText = "商品を編集";
+                document.getElementById('prod-id').value = p.id;
+                document.getElementById('prod-name').value = p.name;
+                document.getElementById('prod-name-en').value = p.nameEn || '';
+                document.getElementById('prod-category').value = p.category;
+                document.getElementById('prod-price').value = p.price;
+                document.getElementById('prod-desc').value = p.desc || '';
+                document.getElementById('prod-allergens').value = p.allergens ? p.allergens.join(', ') : '';
+                document.getElementById('prod-status').value = p.status;
+            } else {
+                modalTitle.innerText = "新しい商品を登録";
+                document.getElementById('prod-id').value = '';
+                document.getElementById('prod-name').value = '';
+                document.getElementById('prod-name-en').value = '';
+                document.getElementById('prod-category').value = 'drink';
+                document.getElementById('prod-price').value = '400';
+                document.getElementById('prod-desc').value = '';
+                document.getElementById('prod-allergens').value = '';
+                document.getElementById('prod-status').value = 'available';
+            }
+
+            openModal('modal-product');
+        };
+
+        window.handleProductSubmit = async function(e) {
+            e.preventDefault();
+            const id = document.getElementById('prod-id').value;
+            const name = document.getElementById('prod-name').value.trim();
+            const nameEn = document.getElementById('prod-name-en').value.trim();
+            const category = document.getElementById('prod-category').value;
+            const price = parseInt(document.getElementById('prod-price').value) || 0;
+            const desc = document.getElementById('prod-desc').value.trim();
+            const allergensRaw = document.getElementById('prod-allergens').value;
+            const status = document.getElementById('prod-status').value;
+
+            const allergens = allergensRaw.split(/[,、]/).map(s => s.trim()).filter(Boolean);
+            const targetId = id || `m-${Date.now()}`;
+
+            const itemData = {
+                id: targetId,
+                name, nameEn, category, price, desc, allergens, status
+            };
+
+            try {
+                await setDoc(doc(menuCol, targetId), itemData, { merge: true });
+                closeModal('modal-product');
+            } catch (err) {
+                console.error("Save product error:", err);
+            }
+        };
+
+        window.updateProductStatus = async function(prodId, newStatus) {
+            try {
+                await updateDoc(doc(menuCol, prodId), { status: newStatus });
+            } catch (err) {
+                console.error("Update product status error:", err);
+            }
+        };
+
+        window.deleteProduct = async function(prodId) {
+            if (confirm('この商品をメニューから削除しますか？')) {
+                try {
+                    await deleteDoc(doc(menuCol, prodId));
+                } catch (err) {
+                    console.error("Delete product error:", err);
+                }
+            }
+        };
+
+        window.handleAuthSubmit = function(e) {
+            e.preventDefault();
+            const pwd = document.getElementById('auth-password').value.trim();
+            const errorMsg = document.getElementById('auth-error-msg');
+
+            if (VALID_PASSWORDS.includes(pwd)) {
+                errorMsg.classList.add('hidden');
+                document.getElementById('auth-password').value = '';
+                switchView('staff');
+            } else {
+                errorMsg.classList.remove('hidden');
+            }
+        };
+
+        window.togglePasswordVisibility = function() {
+            const pwdInput = document.getElementById('auth-password');
+            const pwdIcon = document.getElementById('auth-pwd-icon');
+
+            if (pwdInput.type === 'password') {
+                pwdInput.type = 'text';
+                pwdIcon.className = 'fa-solid fa-eye';
+            } else {
+                pwdInput.type = 'password';
+                pwdIcon.className = 'fa-solid fa-eye-slash';
+            }
+        };
+
+        window.filterMenu = function(category) {
+            window.activeCustomerMenuFilter = category;
+            const btns = document.querySelectorAll('.menu-cat-btn');
+            btns.forEach(btn => {
+                if (btn.innerText.includes(category === 'drink' ? 'ドリンク' : category === 'sweets' ? 'スイーツ' : 'すべて')) {
+                    btn.className = "menu-cat-btn active px-3 py-1.5 rounded-full bg-bloom-brown text-white font-bold transition-all";
+                } else {
+                    btn.className = "menu-cat-btn px-3 py-1.5 rounded-full bg-white text-bloom-brown font-bold border border-bloom-border hover:border-bloom-brown transition-all";
+                }
+            });
+            renderCustomerMenu();
+        };
+
+        window.filterStaffTickets = function(status) {
+            window.activeStaffTicketFilter = status;
+            const btns = document.querySelectorAll('.staff-filter-btn');
+            btns.forEach(btn => {
+                btn.className = "staff-filter-btn px-3 py-1 rounded-full bg-bloom-bg text-bloom-brown font-bold border border-bloom-border";
+            });
+            event.target.className = "staff-filter-btn active px-3 py-1 rounded-full bg-bloom-brown text-white font-bold";
+            renderStaffTickets();
+        };
+
+        window.openModal = function(id) {
+            document.getElementById(id).classList.remove('hidden');
+        };
+
+        window.closeModal = function(id) {
+            document.getElementById(id).classList.add('hidden');
+        };
+
+        window.openManualIssueModal = function() {
+            openModal('modal-manual-issue');
+        };
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/[&<>"']/g, function(m) {
+                return {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#039;'
+                }[m];
+            });
+        }
+
+        function playChimeSound() {
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (!AudioContext) return;
+                const ctx = new AudioContext();
+
+                const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+                notes.forEach((freq, idx) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.value = freq;
+
+                    const startTime = ctx.currentTime + (idx * 0.12);
+                    gain.gain.setValueAtTime(0, startTime);
+                    gain.gain.linearRampToValueAtTime(0.15, startTime + 0.02);
+                    gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.4);
+
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+
+                    osc.start(startTime);
+                    osc.stop(startTime + 0.4);
+                });
+            } catch (e) {}
+        }
+
+        // Start Cloud Sync
+        window.addEventListener('DOMContentLoaded', initCloudSystem);
+    </script>
+</body>
+</html>
